@@ -1,0 +1,4 @@
+Question, is there a downside to assigning column classes at the
+read table step using 'colClasses = '?
+would doing so be "less" tidy than performing it in a separate step using df$var<-factor...
+ 
