@@ -125,6 +125,51 @@ df_long %>% ggpairs(cardinality_threshold = 365)
 
 df_long %>%filter(Metric %in% c("Gain", "High")) %>% ggpairs(aes(color = Metric))
 df_long %>% filter(Metric %in% c("Gain", "High")) %>% filter(Stock != "TSLA")%>% ggplot(aes(x = date, y = Price, group = Metric, color = Stock))+geom_line()
+```
+
+
+```{r}
+library(tidycensus)
+
+#get groups from census codes
+#these population count by sex and age group
+males <- c("P012003", "P012004","P012005","P012006","P012007","P012008","P012009","P012010","P012011","P012012","P012013","P012014","P012015","P012016","P012017","P012018","P012019","P012020","P012021","P012022","P012023","P012024","P012025")
+females <- c("P012027","P012028","P012029","P012030","P012031","P012032","P012033","P012034","P012035","P012036","P012037","P012038","P012039","P012040","P012041","P012042","P012043","P012044","P012045","P012046","P012047","P012048","P012049")
+
+#get tables by sex
+df_males <- get_decennial(geography = "zcta", variables = c(males) , year = 2010, output = "wide")
+df_females <- get_decennial(geography = "zcta", variables = c(females) , year = 2010, output = "wide")
+
+#mutate to add sex var
+age_groups <- c("zipcode",2.5,7,12,16,17.5,20,21,23,27,32,37,42,47,52,57,60.5,63,65,5,68,72,77,82)
+df_m1 <- df_males %>% select(!NAME)#drop NAME column 
+df_f1 <- df_females %>% select(!NAME)
+colnames(df_m1) <- age_groups
+colnames(df_f1) <- age_groups
+
+```
+
+```{r}
+#pivot tables and then add a sex to each
+df_m1 <- df_m1 %>% pivot_longer(cols = !zipcode, names_to = "Group Age", values_to = "Count") %>% mutate(Sex = "Male", .after =zipcode)
+df_f1 <- df_f1 %>% pivot_longer(cols = !zipcode, names_to = "Group Age", values_to = "Count") %>% mutate(Sex = "Female", .after = zipcode)
+
+#combine tables
+df_long <- rbind(df_m1, df_f1)
+df_long$`Group Age` <- as.numeric(df_long$`Group Age`)
+df_long$Sex <- as.factor(df_long$Sex)
+df_long$zipcode <- as.factor(df_long$zipcode)
+
+```
+
+```{r}
+
+topzips <- c("77449", "11368","60629", "79936", "90011")
+df_long%>% filter(zipcode %in% topzips) %>%select(Sex, `Group Age`, Count) %>%  ggpairs(cardinality_threshold = 33120, aes(color = Sex))+theme_stata()+scale_color_tableau()+scale_fill_tableau()
+
+df_long %>% filter(zipcode %in% topzips)%>% ggplot(aes(x = `Group Age`, y = Count, color = Sex))+geom_line()+facet_wrap(~zipcode)+theme_stata()+scale_color_tableau()
+
+df_long %>% filter(zipcode %in% topzips)%>% ggplot(aes(x = Count, fill = Sex))+geom_boxplot()+facet_wrap(~zipcode)+theme_stata()+scale_fill_tableau()
 
 ```
 
