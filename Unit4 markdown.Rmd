@@ -1,0 +1,131 @@
+---
+title: "Unit 4 markdown"
+author: "Miguel Bonilla"
+date: "1/23/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#load libraries
+library(rvest)
+library(httr)
+library(dplyr)
+library(stringi)
+library(stringr)
+library(ggthemes)
+```
+
+
+```{r}
+#file is a broken XML file with missing tags and and syntax errors
+
+#load file using GET
+g_url <- GET("https://d396qusza40orc.cloudfront.net/getdata%2Fdata%2Frestaurants.xml")
+
+#parse using read_html from rvest, pulling the nodes of interest
+
+x <- read_html(g_url)
+x_nameR <- html_nodes(x, "name")
+x_zipR <- html_nodes(x, "zipcode")
+x_disR <- html_nodes(x, "councildistrict")
+```
+
+```{r}
+#use stringy to remove the tags
+#removes characters from either end
+x_name <- stri_sub(x_nameR, 7, -8)
+x_zip <- stri_sub(x_zipR, 10, -11)
+x_dist <- stri_sub(x_disR, 18, -19)
+
+#make dataframe from the 3 columns that have been extracted
+df <- data.frame("name" = x_name,
+                 "zipcode" = x_zip,
+                 "council_district" = x_dist)
+
+```
+
+
+```{r}
+#estimate the number of sushi restaurants on the data set.
+#stringr package is needed for this
+sum(grepl("SUSH", df$name)) #either works
+sum(str_count(df$name, "SUSH"))#either works
+
+#adding column to new data frame to filter by
+sush <- str_count(df$name, "SUSH")
+df2 <- data.frame(df, sush)
+df2 %>% filter(sush == 1) %>% select(name)
+```
+
+
+```{r}
+#sushi restaurants downtown
+#filter for district 11
+df_11 <- df %>% filter(council_district== 11) %>% select(name)
+sum(grepl("SUSH", df_11$name))
+#filter
+sush_dt <- str_count(df_11$name, "SUSH")
+df_11 <- data.frame(df_11, sush_dt)
+df_11 %>% filter(sush_dt == 1) %>% select(name)
+
+```
+
+```{r}
+#barplot of number of restaurants in each district
+str(df$council_district) #check to see if column is factor
+df$council_district <- 
+  factor(df$council_district, levels = c(1:14)) #make column factor
+
+#plot bar graph with categorical variable
+cd_sort <- c(1:14)
+df %>% ggplot(aes(x = council_district, fill = council_district))+
+  geom_bar()+theme_tufte()+
+  scale_fill_pander()+ggtitle("Baltimore Restaurants by District")
+```
+```{r}
+#load quantmod
+library(quantmod)
+library(GGally)
+#get symbols
+getSymbols("GME;AMC;BB;TSLA;WISH;", from ="2021-01-01", to = "2021-12-31")
+#add stock to data frame
+GME1 <- data.frame("GME", GME)
+AMC1 <- data.frame("AMC", AMC)
+BB1 <- data.frame("BB", BB)
+TSLA1 <- data.frame("TSLA", TSLA)
+WISH1 <- data.frame("WISH", WISH)
+
+#change column names to match
+colmn_names <- c("Stock", "Open", "High", "Low", "Close", "Volume", "Adjusted")
+colnames(AMC1) <- colmn_names
+colnames(BB1) <- colmn_names
+colnames(GME1) <- colmn_names
+colnames(TSLA1) <- colmn_names
+colnames(WISH1) <- colmn_names
+
+#bind dataframes into one
+df_wide <- rbind(AMC1, BB1, GME1, TSLA1, WISH1)
+df_wide <- df_wide %>% mutate(date = rownames(df_wide), .before = Stock)
+df_wide <- df_wide %>% select(date, Stock, Open, High, Close, Low)
+df_wide <- df_wide %>% mutate(Gain = Close - Open)
+df_long <- df_wide %>% pivot_longer(cols = -c(date, Stock), names_to = "Metric", values_to = "Price")
+
+#assign var types
+df_long$date <- as.Date(df_long$date)
+df_long$Stock <- as.factor(df_long$Stock)
+df_long$Metric <- as.factor(df_long$Metric)
+df_long$Metric <- factor(df_long$Metric, levels = c("Open", "High", "Low", "Close", "Gain"))
+
+#ggpairs
+df_long %>% ggpairs(cardinality_threshold = 365)
+
+df_long %>%filter(Metric %in% c("Gain", "High")) %>% ggpairs(aes(color = Metric))
+df_long %>% filter(Metric %in% c("Gain", "High")) %>% filter(Stock != "TSLA")%>% ggplot(aes(x = date, y = Price, group = Metric, color = Stock))+geom_line()
+
+```
+
+
