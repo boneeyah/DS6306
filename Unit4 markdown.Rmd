@@ -165,11 +165,11 @@ df_long$zipcode <- as.factor(df_long$zipcode)
 ```{r}
 
 topzips <- c("77449", "11368","60629", "79936", "90011")
-df_long%>% filter(zipcode %in% topzips) %>%select(Sex, `Group Age`, Count) %>%  ggpairs(cardinality_threshold = 33120, aes(color = Sex))+theme_stata()+scale_color_tableau()+scale_fill_tableau()
+df_long%>% filter(zipcode %in% topzips) %>%select(Sex, `Group Age`, Count) %>%  ggpairs(cardinality_threshold = 33120, aes(color = Sex))+theme_stata()+scale_color_pander()+scale_fill_pander()
 
-df_long %>% filter(zipcode %in% topzips)%>% ggplot(aes(x = `Group Age`, y = Count, color = Sex))+geom_line()+facet_wrap(~zipcode)+theme_stata()+scale_color_tableau()
+df_long %>% filter(zipcode %in% topzips)%>% ggplot(aes(x = `Group Age`, y = Count, color = Sex))+geom_line()+facet_wrap(~zipcode)+theme_stata()+scale_color_pander()
 
-df_long %>% filter(zipcode %in% topzips)%>% ggplot(aes(x = Count, fill = Sex))+geom_boxplot()+facet_wrap(~zipcode)+theme_stata()+scale_fill_tableau()
+df_long %>% filter(zipcode %in% topzips)%>% ggplot(aes(x = `Group Age`, y = Count,fill = Sex))+geom_col()+facet_wrap(~zipcode)+theme_stata()+scale_fill_pander()
 
 ```
 
