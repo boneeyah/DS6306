@@ -17,3 +17,8 @@ rt
 library(twitteR)
 
 setup_twitter_oauth(api_k, api_s, access_t, access_s)
+
+tweets <- searchTwitter("aapl", n = 10, lang = "en")
+tweets
+trend = availableTrendLocations()
+trend
