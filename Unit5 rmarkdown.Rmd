@@ -1,0 +1,110 @@
+---
+title: "Unit 5 markdown"
+author: "Miguel Bonilla"
+date: "1/30/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(httr)
+library(dplyr)
+library(stringr)
+library(tidyverse)
+library(cowplot)
+library(GGally)
+
+```
+
+#Part 1
+```{r}
+Bball <- read_csv("PlayersBBall.csv")
+
+#
+Htab <- data.frame(Bball,str_split(Bball$height, "-", simplify = TRUE))#secondary table with new columns for ft and inches
+
+Htab <- mutate(Htab, TotalInches = as.numeric(Htab$X1)*12+as.numeric(Htab$X2))#add inches column
+Htab$position <- as.factor(Htab$position)
+#make histogram of positions
+Htab %>% filter(position != is.na(position)) %>% ggplot(aes(TotalInches, fill = position))+geom_histogram()+facet_wrap(~position)+theme_cowplot()
+
+```
+#Part 2
+```{r}
+Fifa <- read.csv("Fifaplayers.csv")
+#add columns for height and weights
+ftab <- data.frame(Fifa, Heightft=str_split(Fifa$Height, "'", simplify = TRUE),Weightlbs=as.numeric(str_sub(Fifa$Weight, 0,-4)))
+#mutate to add total inches
+ftab <- ftab %>% mutate(HeightFt = as.numeric(ftab$Heightft.1)+as.numeric(ftab$Heightft.2)/12)
+
+ftab %>% ggplot(aes(x = HeightFt, y = Weightlbs))+geom_jitter()+labs(x = "Height in ft.", y = "Weight in lbs.")+geom_smooth()
+
+ftab <- ftab %>% 
+  mutate(PositionGroup = case_when(
+    Position %in% c("ST", "RF", "LF", "CF", "LW", "RW", "RS", "LS") ~ "Forward",
+    Position %in% c("RCM", "LCM", "LDM", "CAM", "CDM", "RM", "LAM", "LM", "RDM", "CM", "RAM") ~ "Midfielder",
+    Position %in% c("RCB", "CB", "LCB", "LB", "RB", "RWB", "LWB") ~ "Defender",
+    Position == "GK" ~ "Goalkeeper"
+  ))
+ftab %>% select(HeightFt,Weightlbs,PositionGroup) %>% ggpairs(aes(color = PositionGroup))
+
+ftab %>% filter(Position == "LB"|Position == "LM") %>% ggplot(aes(x = HeightFt, y = Weightlbs))+geom_point()
+
+```
+
+#Part 3
+```{r}
+#Question 1
+df <- read_delim("yob2016.txt", delim = ";", col_names = c("Name", "Sex", "Count"), col_types = c("Sex" = "factor"))
+#Display the summary and structure of df
+df
+str(df)
+#look for repeated misspelled name
+
+df %>% filter(str_detect(df$Name,"yyy$"))
+y2016 <- df %>% filter(Name != "Fionayyy")
+
+
+
+```
+
+
+
+```{r}
+#Question 2
+#Import
+y2015<- read.csv("yob2015.txt", col.names = c("Name", "Sex", "Count"), colClasses = c("Sex" = "factor"), header = FALSE)
+#display the last ten rows
+tail(y2015, n = 10)
+#Merge
+final <- merge(y2015,y2016, by = c("Name", "Sex"))
+```
+
+
+```{r}
+#Question 3
+final <- final %>% mutate(Total = Count.x+Count.y)
+
+#sort
+final <- final %>% arrange(desc(Total))
+
+final %>% head(n = 10) %>% select(Name, Total)
+final %>% head(n = 10) %>% ggplot(aes(x = Name, y = Total, fill = Sex))+geom_col()
+
+#omit boys
+top10girls <- final %>% filter(Sex =="F") %>% head(n=10) %>% select(Name,Total)
+
+
+#write the top10 names to a csv file
+write_csv(top10girls, "top10girls.csv")
+```
+
+```{r}
+#Question 4
+#create a visual result
+
+```
+
