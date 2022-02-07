@@ -1,0 +1,230 @@
+---
+title: "ForLiveSession6"
+author: "Miguel Bonilla"
+date: "2/6/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(class)
+library(ggplot2)
+library(dplyr)
+library(caret)
+library(plotly)
+library(ggthemes)
+```
+
+
+```{r}
+#load train file
+titan <- read.csv("titanic_train.csv", colClasses = c("Sex"="factor"))
+#Replace categories and change to factor
+titan["Survived"][titan["Survived"]==0] <- "Perished"
+titan["Survived"][titan["Survived"]==1] <- "Survived"
+titan$Survived <- as.factor(titan$Survived)
+
+#check NAs
+sapply(titan, function(x) sum(is.na(x))) #results in 177 Ages missing
+
+#remove NAs from table
+titan <- titan %>% filter(Age != "NA")
+
+#check NAs again to confirm
+sapply(titan, function(x) sum(is.na(x))) #results in 0 NAs for age
+```
+
+
+```{r}
+#dot plot to see general shape of distribution
+titan %>% ggplot(aes(x=Pclass, y = Age, color = Survived))+geom_point()+theme_hc()+scale_color_fivethirtyeight()+xlab("Class")+
+  scale_x_continuous(breaks = c(1,2,3),labels = c("1st","2nd", "3rd"))+theme(legend.title = element_blank())
+?scale_x_continuous
+```
+
+
+```{r}
+#knn class age classify survive
+
+#split train 70-30
+
+n <- nrow(titan)
+traininx<- sample(titan$PassengerId,round(n*.7))
+train <- titan %>% filter(PassengerId %in% traininx)
+test <- titan %>% filter(!PassengerId %in% traininx)
+
+classify <- knn(train[,c("Age", "Pclass")],test[,c("Age","Pclass")],train$Survived,k=3)
+
+confusionMatrix(test$Survived,classify)
+
+```
+
+
+```{r}
+#enter my age and define data frame
+my_age <- 31
+ship_class <- c(1,2,3)
+my_test <- data.frame(Age=my_age, Pclass=ship_class)
+
+#create prediction for my data based on three classes
+
+my_predict <- knn(train[,c("Age","Pclass")],my_test,cl=train$Survived,k=3)
+my_df <- data.frame("Ship Class" = ship_class,"Classification"=my_predict)
+my_df
+ggplot()+geom_point(aes(x=train$Pclass,y=train$Age, color = train$Survived))+
+  geom_point(aes(x=ship_class,y=my_age),color = "#0FFA2A",shape=19)+theme_hc()+scale_color_fivethirtyeight()+
+  xlab("Class")+scale_x_continuous(breaks = c(1,2,3),labels = c("1st","2nd","3rd"))+
+  ylab("Age")+theme(legend.title = element_blank())
+```
+
+```{r}
+#use model to classify 418 passengers in the test and compare
+
+#load file
+test2 <- read.csv("titanic_test.csv", colClasses = c("Sex"="factor"))
+
+#check for NAs
+sapply(test2, function(x) sum(is.na(x)))
+
+#remove NAs from Age
+test2 <- test2 %>% filter(Age != "NA")
+
+#recheck NAs
+sapply(test2, function(x) sum(is.na(x)))
+
+#classify
+predictions <- knn(train[,c("Age", "Pclass")],test2[,c("Age", "Pclass")],train$Survived,k=3)
+
+test3 <- test2 %>% mutate("ClassificationSurvived"=predictions)
+
+
+
+```
+
+
+```{r}
+#bonus
+train_male <- train %>% filter(Sex == "male")
+train_female <- train %>% filter(Sex == "female")
+test_male <- test %>% filter(Sex == "male")
+test_female <- test %>% filter(Sex=="female")
+
+maleclass <- knn(train_male[,c("Age","Pclass")],
+                 test_male[,c("Age","Pclass")],
+                 train_male$Survived,k=3)
+CM_Male <- confusionMatrix(test_male$Survived,maleclass)
+
+femaleclass <- knn(train_female[,c("Age","Pclass")],
+                   test_female[,c("Age","Pclass")],
+                   train_female$Survived,k=3)
+CM_Female <- confusionMatrix(test_female$Survived,femaleclass)
+#classification model 
+CM_Male
+CM_Female
+
+```
+
+
+```{r}
+#new dataframe
+df_iris <- iris
+df_iris$row_id <- 1:nrow(df_iris)
+
+#standarize
+df_iris <- df_iris %>% mutate("Standarized Sepal Length"=scale(df_iris$Petal.Length),"Standarized Speal Width"=scale(df_iris$Sepal.Width))
+
+#find total size
+n <- nrow(df_iris)
+#get the split data
+test_indx <- sample(df_iris$row_id,n*.7)
+test_iris <- df_iris %>% filter(row_id %in% test_indx)
+train_iris <- df_iris %>% filter(!row_id %in% test_indx)
+
+
+df_iris %>% ggplot(aes(x=Sepal.Length,y=Sepal.Width, color = Species))+geom_point()+theme_hc()+scale_color_fivethirtyeight()
+
+df_iris %>% ggplot(aes(x=`Standarized Sepal Length`,y=`Standarized Speal Width`, color = Species))+geom_point()+theme_hc()+scale_color_fivethirtyeight()
+```
+
+
+```{r}
+#cross validation with k 1-90
+
+df_accu <- data.frame()
+
+for (i in 1:90) {
+  classification <- knn(train_iris[,c("Sepal.Length","Sepal.Width")],
+      test_iris[,c("Sepal.Length", "Sepal.Width")],
+      train_iris$Species,k=3)
+  CM <- confusionMatrix(test_iris$Species,classification)
+  result <- c(i,CM$overall[1])
+  df_accu <- rbind(df_accu,result)
+}
+colnames(df_accu) <- c("k","Accuracy")
+
+p <- df_accu %>% ggplot(aes(x=k,y=Accuracy))+geom_line(color = "#008FD5")+theme_hc()+ggtitle("Original Scale")
+
+ggplotly(p)
+
+CM
+
+```
+
+```{r}
+#repeat for standarized data
+df_accu <- data.frame()
+
+for (i in 1:90) {
+  classification <- knn(train_iris[,c("Standarized Sepal Length","Standarized Speal Width")],
+      test_iris[,c("Standarized Sepal Length", "Standarized Speal Width")],
+      train_iris$Species,k=3)
+  CM <- confusionMatrix(test_iris$Species,classification)
+  result <- c(i,CM$overall[1])
+  df_accu <- rbind(df_accu,result)
+}
+colnames(df_accu) <- c("k","Accuracy")
+
+p <- df_accu %>% ggplot(aes(x=k,y=Accuracy))+geom_line(color = "#008FD5")+theme_hc()+ggtitle("Standardized Scale")
+
+ggplotly(p)
+
+CM
+```
+
+
+```{r}
+#bonus
+#with leave one out
+df_cv <- data.frame()
+
+for (i in 1:90) {
+  classification <- knn.cv(df_iris[,c("Sepal.Length","Sepal.Width")],df_iris$Species,k=i)
+  CM <- confusionMatrix(df_iris$Species,classification)
+  result <- c(i,CM$overall[1])
+  df_cv <- rbind(df_cv,result)
+}
+colnames(df_cv) <- c("k", "Accuracy")
+p <- df_cv %>% ggplot(aes(x=k,y=Accuracy))+geom_line(color = "#008FD5")+theme_hc()+ggtitle("Original Scale")
+ggplotly(p)
+
+```
+
+
+```{r}
+#with leave one out
+df_cv <- data.frame()
+
+for (i in 1:90) {
+  classification <- knn.cv(df_iris[,c("Standarized Sepal Length","Standarized Speal Width")],df_iris$Species,k=i)
+  CM <- confusionMatrix(df_iris$Species,classification)
+  result <- c(i,CM$overall[1])
+  df_cv <- rbind(df_cv,result)
+}
+colnames(df_cv) <- c("k", "Accuracy")
+p <- df_cv %>% ggplot(aes(x=k,y=Accuracy))+geom_line(color = "#008FD5")+theme_hc()+ggtitle("Standardized Scale")
+ggplotly(p)
+```
+
