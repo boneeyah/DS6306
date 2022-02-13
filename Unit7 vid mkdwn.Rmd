@@ -1,0 +1,30 @@
+---
+title: "Unit 7 Notebook"
+output: html_notebook
+---
+```{r}
+#NYT API
+library(e1071)
+library(tm)
+library(plyr)
+library(jsonlite)
+library(dplyr)
+library(tidyverse)
+
+```
+
+
+```{r}
+api_key <- "7tl75iH7w2vOJJUBosFdtNyVhAzBKD2E"
+term <- "Central+Park+Jogger"
+begin_date <- "19890419"
+end_date <- "19910419"
+
+```
+
+```{r}
+baseurl <- paste0("http")
+
+
+```
+
