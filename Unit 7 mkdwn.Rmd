@@ -1,0 +1,237 @@
+---
+title: "Unit 7 FLS"
+author: "Miguel Bonilla"
+date: "2/12/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(caret)
+library(e1071)
+library(ggthemes)
+
+
+```
+
+
+```{r}
+#load the titanic file first
+titan <- read.csv("titanic_train.csv", colClasses = c("Sex" = "factor","Survived"="factor"))
+titan$Survived <- recode_factor(titan$Survived, "0"="Perished", "1"="Survived")
+
+```
+
+```{r}
+#use all observations on original table and train a NB model to predict
+Titanicall <- titan %>% select(Age, Pclass, Survived)
+#Titanicall$Survived[Titanicall$Survived == "0"] <- "Perished"
+#Titanicall$Survived[Titanicall$Survived == "1"] <- "Survived"
+model <- naiveBayes(Survived~.,Titanicall, laplace = 3)
+df <- data.frame(predict(model,Titanicall, type="raw"))
+print(df,n=30)
+
+```
+
+
+```{r}
+#split the observations into a training and test set 70-30
+titanicclean <- titan %>% filter(!is.na(Age)& !is.na(Pclass))
+set.seed(4) #assigned
+trainIndices <- sample(seq(1:length(titanicclean$Age)), round(.7*length(titanicclean$Age)))
+trainTitanic <- titanicclean[trainIndices,]
+testTitanic <- titanicclean[-trainIndices,]
+
+head(trainTitanic)
+head(testTitanic)
+
+```
+
+
+```{r}
+#train model using train set
+
+model <- naiveBayes(trainTitanic[,c(6,3)],trainTitanic$Survived)
+df <- data.frame(classification=predict(model,testTitanic))
+cm <- confusionMatrix(df$classification,testTitanic$Survived)
+cm
+
+```
+
+
+```{r}
+set.seed(4)#return to seed 4
+#set seed 6
+titanicclean <- titan %>% filter(!is.na(Age)& !is.na(Pclass))
+set.seed(6) #6
+trainIndices <- sample(seq(1:length(titanicclean$Age)), round(.7*length(titanicclean$Age)))
+trainTitanic <- titanicclean[trainIndices,]
+testTitanic <- titanicclean[-trainIndices,]
+
+model <- naiveBayes(trainTitanic[,c(6,3)],trainTitanic$Survived)
+df <- data.frame(classification=predict(model,testTitanic))
+cm <- confusionMatrix(df$classification,testTitanic$Survived)
+cm
+
+#set seed 20
+titanicclean <- titan %>% filter(!is.na(Age)& !is.na(Pclass))
+set.seed(20) #20
+trainIndices <- sample(seq(1:length(titanicclean$Age)), round(.7*length(titanicclean$Age)))
+trainTitanic <- titanicclean[trainIndices,]
+testTitanic <- titanicclean[-trainIndices,]
+
+model <- naiveBayes(trainTitanic[,c(6,3)],trainTitanic$Survived)
+df <- data.frame(classification=predict(model,testTitanic))
+cm <- confusionMatrix(df$classification,testTitanic$Survived)
+cm
+
+#set seed 60
+titanicclean <- titan %>% filter(!is.na(Age)& !is.na(Pclass))
+set.seed(60) #60
+trainIndices <- sample(seq(1:length(titanicclean$Age)), round(.7*length(titanicclean$Age)))
+trainTitanic <- titanicclean[trainIndices,]
+testTitanic <- titanicclean[-trainIndices,]
+
+model <- naiveBayes(trainTitanic[,c(6,3)],trainTitanic$Survived)
+df <- data.frame(classification=predict(model,testTitanic))
+cm <- confusionMatrix(df$classification,testTitanic$Survived)
+cm
+
+#set seed 85
+titanicclean <- titan %>% filter(!is.na(Age)& !is.na(Pclass))
+set.seed(85) #85
+trainIndices <- sample(seq(1:length(titanicclean$Age)), round(.7*length(titanicclean$Age)))
+trainTitanic <- titanicclean[trainIndices,]
+testTitanic <- titanicclean[-trainIndices,]
+
+model <- naiveBayes(trainTitanic[,c(6,3)],trainTitanic$Survived)
+df <- data.frame(classification=predict(model,testTitanic))
+cm <- confusionMatrix(df$classification,testTitanic$Survived)
+cm
+```
+
+
+```{r}
+set.seed(4)#return to seed 4
+n=100
+sample <- data.frame("seed"=sample(seq(1:10000),n))
+dfstats <- data.frame()
+for (i in 1:n) {
+  #set the new seed and do 70-30 split
+  set.seed(sample[i,])
+  loopIndices <- sample(seq(1:length(titanicclean$Age)), round(.7*length(titanicclean$Age)))
+  looptrain <- titanicclean[loopIndices,]
+  looptest <- titanicclean[-loopIndices,]
+  #model
+  loopmodel <- naiveBayes(looptrain[,c(6,3)],looptrain$Survived)
+  loopdf <- data.frame(classification=predict(loopmodel,looptest))
+  loopcm <- confusionMatrix(loopdf$classification,looptest$Survived)
+  loopstats <- data.frame("Accuracy"=loopcm$overall[1],
+                 "Sensitivity"=loopcm$byClass[1],
+                 "Specificity"=loopcm$byClass[2],
+                 "Seed"=sample$seed[i],
+                 row.names = i)
+  dfstats <- rbind(dfstats,loopstats)
+  
+}
+dflong <- dfstats %>%select(1:3) %>%  pivot_longer(cols = 1:3,names_to = "stats",values_to = "value")
+dflong %>% ggplot(aes(x=stats,y=value, fill=stats))+geom_boxplot()+theme_hc()+scale_fill_pander()+stat_summary(fun = "mean", shape = 5, color = "white",size = .4)+ggtitle("Distribution of Accuracy, Sensitivity and Specificity")
+
+dflong %>% group_by(stats) %>% summarise("mean"=mean(value), "median"=median(value))
+
+```
+
+
+```{r}
+set.seed(4)
+#add sex to the model
+titanicclean <- titan %>% filter(!is.na(Age)& !is.na(Pclass))
+trainIndices <- sample(seq(1:length(titanicclean$Age)), round(.7*length(titanicclean$Age)))
+trainTitanic <- titanicclean[trainIndices,]
+testTitanic <- titanicclean[-trainIndices,]
+
+
+modelwsex <- naiveBayes(trainTitanic[,c(6,3,5)],trainTitanic$Survived)
+dfwsex <- data.frame("classification"=predict(modelwsex,trainTitanic))
+confusionMatrix(dfwsex$classification,trainTitanic$Survived)
+
+```
+
+```{r}
+set.seed(4)#return to seed 4
+n=100
+sample <- data.frame("seed"=sample(seq(1:10000),n))
+dfstats <- data.frame()
+for (i in 1:n) {
+  #set the new seed and do 70-30 split
+  set.seed(sample[i,])
+  loopIndices <- sample(seq(1:length(titanicclean$Age)), round(.7*length(titanicclean$Age)))
+  looptrain <- titanicclean[loopIndices,]
+  looptest <- titanicclean[-loopIndices,]
+  #model
+  loopmodel <- naiveBayes(looptrain[,c(6,3,5)],looptrain$Survived)
+  loopdf <- data.frame(classification=predict(loopmodel,looptest))
+  loopcm <- confusionMatrix(loopdf$classification,looptest$Survived)
+  loopstats <- data.frame("Accuracy"=loopcm$overall[1],
+                 "Sensitivity"=loopcm$byClass[1],
+                 "Specificity"=loopcm$byClass[2],
+                 "Seed"=sample$seed[i],
+                 row.names = i)
+  dfstats <- rbind(dfstats,loopstats)
+  
+}
+dflong <- dfstats %>%select(1:3) %>%  pivot_longer(cols = 1:3,names_to = "stats",values_to = "value")
+dflong %>% ggplot(aes(x=stats,y=value, fill=stats))+geom_boxplot()+theme_hc()+scale_fill_pander()+stat_summary(fun = "mean", shape = 5, color = "white",size = .4)+ggtitle("Distribution of Accuracy, Sensitivity and Specificity")
+
+dflong %>% group_by(stats) %>% summarise("mean"=mean(value), "median"=median(value))
+
+```
+
+
+```{r}
+set.seed(4)#return to seed 4
+#70-30 split for Iris data set
+irisall <- iris
+n=100
+dfstatsiris <- data.frame()
+irissample <- data.frame("seed"=sample(seq(1:10000),n))
+
+for (i in 1:n) {
+  #set the new seed and do 70-30 split
+  set.seed(irissample$seed[i])
+  irisindx <- sample(seq(1:nrow(irisall)), round(.7*nrow(irisall)))
+  iristrain <- irisall[irisindx,]
+  iristest <- irisall[-irisindx,]
+  #model
+  irismodel <- naiveBayes(iristrain[,c(1,2)],iristrain$Species)
+  irisdf <- data.frame(classification=predict(irismodel,iristest))
+  iriscm <- confusionMatrix(irisdf$classification,iristest$Species)
+  irisstats <- data.frame("Accuracy"=iriscm$overall[1],
+                         "Sensitivity Setosa"=iriscm$byClass[1],
+                         "Sensitivity Versicolor"=iriscm$byClass[2],
+                         "Sensitivity Virginica"=iriscm$byClass[3],
+                         "Specificity Setosa"=iriscm$byClass[4],
+                         "Specificity Versicolor"=iriscm$byClass[5],
+                         "Specificity Virginica"=iriscm$byClass[6],
+                         "Seed"=irissample$seed[i],
+                         row.names = i)
+  dfstatsiris <- rbind(dfstatsiris,irisstats)
+  
+}
+irislong <- dfstatsiris %>% pivot_longer(cols = -c(8),names_to = "stats",values_to = "value") %>% select(2:3)
+irislong %>% group_by(stats) %>% summarise("mean"=mean(value),"median"=median(value))
+
+irislong %>% ggplot(aes(x=value,y=stats, fill = stats))+geom_boxplot()+theme_hc()+scale_fill_pander()+stat_summary(fun = "mean", shape = 5, color = "white", size = .4)
+?geom_boxplot
+```
+
+
+```{r}
+#bonus
+
+```
+
