@@ -16,6 +16,7 @@ library(caret)
 library(e1071)
 library(ggthemes)
 library(tm)
+library(jsonlite)
 
 ```
 
@@ -330,6 +331,7 @@ Pnews_word <- function(key_word, nyt_train, alphaLaplace=1, betaLaplace = 1)
 ```
 
 ```{r}
+set.seed(2)
 Pnews_word("the",nyt_train)
 
 thescoreholdernews <- c()
@@ -369,7 +371,7 @@ confusionMatrix(as.factor(nyt_test$classified),as.factor(nyt_test$other))
 test1reference <- data.frame(type=nyt_test[,34],from="reference")
 test1classified <- data.frame(type=nyt_test[,35],from="classified")
 test1 <- rbind(test1reference,test1classified)
-test1 %>% ggplot(aes(x=from,fill=type))+geom_bar()+theme_hc()+scale_fill_pander()
+test1 %>% ggplot(aes(x=from,fill=type))+geom_bar()+theme_hc()+scale_fill_pander()+ggtitle("NB Using Headline")
 ```
 
 
@@ -403,17 +405,18 @@ Pnews_word <- function(key_word, nyt_train, alphaLaplace=1, betaLaplace = 1)
 ```
 
 ```{r}
+set.seed(2)
 nyt_test2 <- allnytsearch[-allnytindx,]
 thescoreholdernews <- c()
 thescoreholderother <- c()
 articlescorenews <- 0
 articlescoreother <- 0
 
-for (i in 1:nrow(nyt_test)) {
+for (i in 1:nrow(nyt_test2)) {
   articlescorenews=1;#because we will multiply so we have to start with 1 so that it's 1*
   articlescoreother=1;
   #this will take out all non alpha numeric characters
-  thetext <- unlist(str_split(str_replace_all(nyt_test[i,]$response.docs.snippet,"[^[:alnum:] ]",""),boundary("word")))
+  thetext <- unlist(str_split(str_replace_all(nyt_test2[i,]$response.docs.snippet,"[^[:alnum:] ]",""),boundary("word")))
   
   #stopwords
   wordstotakeout <- stopwords()
