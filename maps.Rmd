@@ -1,0 +1,122 @@
+---
+title: "case-study"
+author: "Miguel Bonilla"
+date: "2/18/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#libraries for generating maps
+library(ggplot2)
+library(maps)
+library(tidyverse)
+library(ggthemes)
+```
+
+
+```{r}
+#Load the external data tables and wrangle the data to be usable
+brewery <- read.csv("breweries.csv")
+beer <- read.csv("beers.csv")
+#load counties table
+cnty <- read.csv("cty-cnty.csv")
+colnames(cnty)[3] <- "region"
+
+#data wrangle
+brewery$State <- trimws(brewery$State, which = c("left"))
+cnty <- cnty %>% select("City", "State","County","region")#select columns
+cnty <- cnty[!duplicated(cnty),]
+
+
+#left join brew and cnty
+brewcomb <- merge(brewery, select(cnty, c("City", "State", "County","region")), by=c("City","State"))
+brewcomb <- brewcomb %>% distinct(Brew_ID, .keep_all = TRUE)#missing change from MA to MI
+
+#1 table wtih state count, map with state count and map with county count
+#state and county tables
+us_states <- map_data("state")
+us_counties <- map_data("county")
+
+#state brewery count
+brew_state <- brewcomb %>% mutate(region=tolower(region)) %>%
+  group_by(region) %>% count(region)
+brew_state %>% arrange(desc(n))
+#state gradient map
+us_states %>% left_join(brew_state,by=("region")) %>% 
+  ggplot(aes(x=long,y=lat,group=group,fill=n))+
+  geom_polygon(color = "gray90", size=.1)+
+  coord_map(projection = "albers", lat0=45, lat1=55)+
+  scale_fill_viridis_c()+
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        panel.background = element_blank(),
+        axis.title = element_blank())+
+  labs(fill="Brewery\nCount")+
+  ggtitle("Breweries by State\nContinental US")
+  
+#county brewery count
+brew_county <- brewcomb %>% mutate(subregion=tolower(County)) %>% 
+  group_by(subregion) %>% count(subregion)
+#county gradient map
+us_counties %>% left_join(brew_county,by="subregion") %>%
+  ggplot()+
+  geom_polygon(aes(x=long,y=lat,group=group,fill=n),color = "gray90",size=.1)+
+  coord_map(projection = "albers",lat0=45,lat1=55)+
+  scale_fill_viridis_c()+
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        panel.background = element_blank(),
+        axis.title = element_blank())+
+  labs(fill="Brewery\nCount")+
+  ggtitle("Breweries by County\nContinental US")+
+  geom_polygon(data = us_states,aes(x=long,y=lat,group=group), color = "white",size=.15,fill="transparent")
+```
+```{r}
+#use base code to merge
+
+#renaming columns for the join to the beer dataset
+brewery=rename(brewery, Brewery_id=Brew_ID, Brewery=Name)
+
+#join between brewery and beer data
+beer_brewery = merge(x=brewery,y=beer,by="Brewery_id")
+
+#filtering of NAs for ABV and IBU-- rows drop from 2410 down to 1405 for this filtering
+#only use this filtered dataset for the questions related to ABV/IBU
+beer_brewery <- beer_brewery %>% filter_at(vars(ABV,IBU),all_vars(!is.na(.)))
+```
+
+```{r}
+#5 which state has the maximum alcoholic (ABV) beer? which state has the most bitter (IBU) beer?
+beer_brewery %>% merge(select(cnty, c("City", "State", "County","region")), by=c("City","State")) %>% 
+  group_by(region) %>% summarise(max_ABV=max(ABV)) %>% arrange(desc(max_ABV))
+
+beer_brewery %>% merge(select(cnty, c("City", "State", "County","region")), by=c("City","State")) %>% 
+  group_by(region) %>% summarise(Most_Bitter=max(IBU)) %>% arrange(desc(Most_Bitter))
+
+
+```
+```{r}
+#6 comment on the summary statistics and distribution of the ABV variable
+beer_brewery %>% ggplot(aes(x=Beer_ID,y=ABV))+geom_point()
+beer_brewery %>% ggplot(aes(x=ABV))+geom_density()
+
+beer_brewery %>% select(ABV) %>%
+  summarise(min=min(ABV),
+            "25%"=quantile(ABV,.25),
+            median=median(ABV),
+            "75%"=quantile(ABV,.75),
+            max=max(ABV),mean=mean(ABV))
+
+#right skewed distribution centered at .057, there seems to be some degree of rounding occuring at around .1, given that there are several beers that are exactly at the line with fewer slightly below and almost none slightly above the number. There also seems to be some degree of rounding at .5, but this is less pronounced
+```
+
+```{r}
+#8
+```
+
