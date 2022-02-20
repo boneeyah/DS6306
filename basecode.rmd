@@ -8,6 +8,7 @@ beer = read.csv(file.choose(),header = TRUE)
 
 #renaming columns for the join to the beer dataset
 brewery=rename(brewery, Brewery_id=Brew_ID, Brewery=Name)
+brewery$State <- trimws(brewery$State, which = c("left")) #removes space before each state abbreviation on State column
 
 #pulling ids with inaccurate info
 Brewery_id<-as.integer(c(96,415,167, 262, 139))
@@ -52,7 +53,6 @@ cnty <- read.csv("cty-cnty.csv")
 colnames(cnty)[3] <- "region"
 
 #data wrangle
-brewery$State <- trimws(brewery$State, which = c("left"))
 cnty <- cnty %>% select("City", "State","County","region")#select columns
 cnty <- cnty[!duplicated(cnty),]
 
