@@ -1,0 +1,160 @@
+```{r}
+#Question 2 & 3
+library(dplyr)
+library(tidyr)
+#reading in the csvs
+brewery = read.csv(file.choose(),header = TRUE)
+beer = read.csv(file.choose(),header = TRUE)
+
+#renaming columns for the join to the beer dataset
+brewery=rename(brewery, Brewery_id=Brew_ID, Brewery=Name)
+
+#pulling ids with inaccurate info
+Brewery_id<-as.integer(c(96,415,167, 262, 139))
+error_brew_ids<-as.data.frame(Brewery_id)
+#joining to get Brewery Names
+brew_filter = merge(x=error_brew_ids,y=brewery,by="Brewery_id") %>% select(Brewery_id, Brewery)
+
+#joining on brewery name to pull in correct columns--filter out inaccurate
+brew_filter = merge(x=brewery,y=brew_filter,by="Brewery") %>% mutate(type = case_when( Brewery_id.x==Brewery_id.y ~ "correct",TRUE~  "wrong"))
+#filtering down to rows with errors
+brew_replace =brew_filter %>%filter(type == "wrong") %>% select(Brewery_id.y, Brewery, City, State)%>% rename(Brewery_id=Brewery_id.y)
+
+#removing errors and replacing with updated df
+brewery = anti_join(x=brewery,y=error_brew_ids,by="Brewery_id")
+brewery<-rbind(brewery, brew_replace)
+brewery$City = str_replace(brewery$City, "Menominie", "Menomonie")
+
+#join between brewery and beer data
+beer_brewery = merge(x=brewery,y=beer,by="Brewery_id")
+
+#print first 6 rows
+head(beer_brewery)
+#print last 6 rows
+tail(beer_brewery)
+
+#filtering of NAs for ABV and IBU-- rows drop from 2410 down to 1405 for this filtering
+#only use this filtered dataset for the questions related to ABV/IBU
+clean_beer_brewery <- beer_brewery %>% filter_at(vars(ABV,IBU),all_vars(!is.na(.)))
+```
+
+
+```{r}
+#question 1 (and possibly part of 9)
+#How many breweries are present in each state? (counties heatmap)
+#load libraries
+library(ggplot2)
+library(maps)
+library(tidyverse)
+library(ggthemes)
+#load counties table
+cnty <- read.csv("cty-cnty.csv")
+colnames(cnty)[3] <- "region"
+
+#data wrangle
+brewery$State <- trimws(brewery$State, which = c("left"))
+cnty <- cnty %>% select("City", "State","County","region")#select columns
+cnty <- cnty[!duplicated(cnty),]
+
+
+#left join brew and cnty
+brewcomb <- merge(brewery, select(cnty, c("City", "State", "County","region")), by=c("City","State"))
+brewcomb <- brewcomb %>% distinct(Brewery_id, .keep_all = TRUE)
+
+#1 table wtih state count, map with state count and map with county count
+#state and county tables
+us_states <- map_data("state")
+us_counties <- map_data("county")
+
+#state brewery count
+brew_state <- brewcomb %>% mutate(region=tolower(region)) %>%
+  group_by(region) %>% count(region)
+brew_state %>% arrange(desc(n))
+#state gradient map
+us_states %>% left_join(brew_state,by=("region")) %>% 
+  ggplot(aes(x=long,y=lat,group=group,fill=n))+
+  geom_polygon(color = "gray90", size=.1)+
+  coord_map(projection = "albers", lat0=45, lat1=55)+
+  scale_fill_viridis_c()+
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        panel.background = element_blank(),
+        axis.title = element_blank())+
+  labs(fill="Brewery\nCount")+
+  ggtitle("Breweries by State\nContinental US")
+  
+#county brewery count
+brew_county <- brewcomb %>% mutate(subregion=tolower(County)) %>% 
+  group_by(subregion) %>% count(subregion)
+#county gradient map
+us_counties %>% left_join(brew_county,by="subregion") %>%
+  ggplot()+
+  geom_polygon(aes(x=long,y=lat,group=group,fill=n),color = "gray90",size=.1)+
+  coord_map(projection = "albers",lat0=45,lat1=55)+
+  scale_fill_viridis_c()+
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        panel.background = element_blank(),
+        axis.title = element_blank())+
+  labs(fill="Brewery\nCount")+
+  ggtitle("Breweries by County\nContinental US")+
+  geom_polygon(data = us_states,aes(x=long,y=lat,group=group), color = "white",size=.15,fill="transparent")
+```
+
+```{r}
+#Question 4
+#Compute the median alcohol content and international bitterness unit for each state. Plot a bar chart to compare.
+#bar graph of median alcohol content by State
+bb<-clean_beer_brewery %>% filter(!is.na(ABV)) %>% group_by(State) %>% summarize(medianABV = median(ABV), medianIBU=round(median(IBU),0), count = n()) %>% ggplot(aes(x = reorder(State, -medianABV), y = medianABV, fill=medianIBU)) + geom_col(width=1)+ 
+  xlab('State') + ylab('Median ABV')+ggtitle("Median IBU/ABV by State") +theme(axis.text = element_text(size = 6))+ scale_fill_gradient(low='#46085C', high='#4FBA6E', name='Median IBU')
+bb + scale_y_continuous(labels = scales::percent)+ coord_flip()
+```
+
+```{r}
+#5 which state has the maximum alcoholic (ABV) beer? which state has the most bitter (IBU) beer?
+beer_brewery %>% merge(select(cnty, c("City", "State", "County","region")), by=c("City","State")) %>% 
+  group_by(region) %>% summarise(max_ABV=max(ABV)) %>% arrange(desc(max_ABV))
+
+beer_brewery %>% merge(select(cnty, c("City", "State", "County","region")), by=c("City","State")) %>% 
+  group_by(region) %>% summarise(Most_Bitter=max(IBU)) %>% arrange(desc(Most_Bitter))
+```
+
+```{r}
+#Question 6
+#comment on the summary statistics and distribution of the ABV variable
+clean_beer_brewery %>% ggplot(aes(x=Beer_ID,y=ABV))+geom_point()
+clean_beer_brewery %>% ggplot(aes(x=ABV))+geom_density()
+
+clean_beer_brewery %>% select(ABV) %>%
+  summarise(min=min(ABV),
+            "25%"=quantile(ABV,.25),
+            median=median(ABV),
+            "75%"=quantile(ABV,.75),
+            max=max(ABV),mean=mean(ABV))
+```
+```{r}
+#Question 7
+#7.Is there an apparent relationship between the bitterness of the beer and its alcoholic content? Draw a scatter plot. Make your best judgment of a relationship and EXPLAIN your answer.
+
+#comparison of ABV/IBU in scatter plot with regression line
+bb.lm <- lm(ABV~ IBU, clean_beer_brewery)
+bb = clean_beer_brewery %>% ggplot(aes(x = ABV, y=IBU, color = IBU)) + geom_point()+ ggtitle("International Bitterness Units vs. Alchohol by Volume")+ 
+  geom_smooth(method='lm', formula= y~x)
+bb
+
+```
+```{r}
+
+#Question 8
+#Budweiser would also like to investigate the difference with respect to IBU and ABV between IPAs (India Pale Ales) and other types of Ale (any beer with “Ale” in its name other than IPA).  You decide to use KNN classification to investigate this relationship.  Provide statistical evidence one way or the other. You can of course assume your audience is comfortable with percentages … KNN is very easy to understand conceptually.
+```
+```{r}
+#Question 9
+#Knock their socks off!  Find one other useful inference from the data that you feel Budweiser may be able to find value in.  You must convince them why it is important and back up your conviction with appropriate statistical evidence. 
+```
+
+
+
+
