@@ -15,6 +15,9 @@ library(ggplot2)
 library(maps)
 library(tidyverse)
 library(ggthemes)
+library(kableExtra)
+library(caret)
+library(class)
 ```
 
 
@@ -43,8 +46,11 @@ us_counties <- map_data("county")
 
 #state brewery count
 brew_state <- brewcomb %>% mutate(region=tolower(region)) %>%
-  group_by(region) %>% count(region)
-brew_state %>% arrange(desc(n))
+  group_by(region) %>% count(region) %>% arrange(desc(n))
+brew_state %>% mutate(region=str_to_title(region)) %>% kable(col.names = c("State","Breweries")) %>% 
+  kable_styling(latex_options = c("striped", "scale_down")) %>% 
+  row_spec(row = 0, italic = T, background = "#21918c", color = "white") %>% 
+  column_spec(1:2, width = "0.5in")
 #state gradient map
 us_states %>% left_join(brew_state,by=("region")) %>% 
   ggplot(aes(x=long,y=lat,group=group,fill=n))+
@@ -103,7 +109,7 @@ beer_brewery %>% merge(select(cnty, c("City", "State", "County","region")), by=c
 ```
 ```{r}
 #6 comment on the summary statistics and distribution of the ABV variable
-beer_brewery %>% ggplot(aes(x=Beer_ID,y=ABV))+geom_point()
+beer_brewery %>% ggplot(aes(x=Beer_ID,y=ABV))+geom_point()+theme_clean()
 beer_brewery %>% ggplot(aes(x=ABV))+geom_density()
 
 beer_brewery %>% select(ABV) %>%
@@ -118,5 +124,29 @@ beer_brewery %>% select(ABV) %>%
 
 ```{r}
 #8
+#add ipa, ale, other column
+ipa_ale <- c()
+ipa_ale <-
+  beer_brewery %>% mutate(Ale_type = ifelse(
+    str_detect(beer_brewery$Style, regex("ipa", ignore_case = TRUE)),
+    "IPA",
+    ifelse(str_detect(
+      beer_brewery$Style, regex("ale", ignore_case = TRUE)
+    ), "Ale", "other")
+  ))
+#filter out "other" type of beers and drop levels
+ipa_ale <- ipa_ale %>% filter(Ale_type %in% c("IPA", "Ale")) %>% droplevels(ipa_ale$Ale_type)
+
+#split data into train and test
+n <- nrow(ipa_ale)
+set.seed(6)
+nsamp <- sample(1:n,round(n*.7))
+ipa_train <- ipa_ale[nsamp,]
+ipa_test <- ipa_ale[-nsamp,]
+
+summary(as.factor(ipa_train$Ale_type))
+classification <- knn(scale(ipa_train[,6:7]),scale(ipa_test[,6:7]),cl = ipa_train$Ale_type,k=35)
+cm <- confusionMatrix(classification,as.factor(ipa_test$Ale_type),positive = "IPA")
+cm
 ```
 
