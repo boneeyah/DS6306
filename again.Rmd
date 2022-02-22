@@ -19,8 +19,8 @@ library(mvtnorm)
 ```{r}
 api_key <- "7tl75iH7w2vOJJUBosFdtNyVhAzBKD2E"
 term <- "Trump"
-begin_date <- "19890419"
-end_date <- "19910419"
+begin_date <- "20220113"
+end_date <- "20220212"
 
 baseurl <- paste0("https://api.nytimes.com/svc/search/v2/articlesearch.json?q=",term,"&begin_date=",begin_date,"&end_date=",end_date,"&facet_filter=true&api-key=",api_key)
 ```
@@ -90,7 +90,7 @@ dim(nyt_train)
 
 Pnews_word <- function(key_word, nyt_train, alphaLaplace=1, betaLaplace = 1)
 {
-  nyt_train$response.docs.headline.main=unlist(str_replace_all(nyt_train$response.docs.headline.main,"[^[:alnum:] ]",""))#leaves in only alpha numeric characters from headline
+  nyt_train$response.docs.snippet=unlist(str_replace_all(nyt_train$response.docs.snippet,"[^[:alnum:] ]",""))#leaves in only alpha numeric characters from headline
   #print(key_word)
   NewsGroup <- nyt_train[nyt_train$other=="News",]
   OtherGroup <- nyt_train[nyt_train$other=="Other",]
@@ -99,8 +99,8 @@ Pnews_word <- function(key_word, nyt_train, alphaLaplace=1, betaLaplace = 1)
   pOther=1-pNews
   
   #meat and potatoes
-  pKWGivenNews <- (length(str_which(NewsGroup$response.docs.headline.main,regex(str_c("\\b",key_word,"\\b",sep=""),ignore_case = TRUE )))+alphaLaplace)/(dim(NewsGroup)[1]+betaLaplace)
-  pKWGivenOther <- (length(str_which(OtherGroup$response.docs.headline.main,regex(str_c("\\b",key_word,"\\b",sep=""),ignore_case = TRUE )))+alphaLaplace)/(dim(OtherGroup)[1]+betaLaplace)
+  pKWGivenNews <- (length(str_which(NewsGroup$response.docs.snippet,regex(str_c("\\b",key_word,"\\b",sep=""),ignore_case = TRUE )))+alphaLaplace)/(dim(NewsGroup)[1]+betaLaplace)
+  pKWGivenOther <- (length(str_which(OtherGroup$response.docs.snippet,regex(str_c("\\b",key_word,"\\b",sep=""),ignore_case = TRUE )))+alphaLaplace)/(dim(OtherGroup)[1]+betaLaplace)
   
   pKW <- length(str_which(nyt_train$response.docs.headline.main,regex(str_c("\\b",key_word,"\\b",sep=""),ignore_case = TRUE )))/(dim(nyt_train)[1])
   
@@ -147,4 +147,82 @@ for (i in 1:nrow(nyt_test)) {
 nyt_test$classified <- ifelse(thescoreholdernews>thescoreholderother,"News","Other")
 
 table(nyt_test$classified,nyt_test$other)#actual in columns
+confusionMatrix(as.factor(nyt_test$classified),as.factor(nyt_test$other))
+
+
+test1reference <- data.frame(type=nyt_test[,34],from="reference")
+test1classified <- data.frame(type=nyt_test[,35],from="classified")
+test1 <- rbind(test1reference,test1classified)
+test1 %>% ggplot(aes(x=from,fill=type))+geom_bar()+theme_hc()+scale_fill_pander()
+```
+
+
+```{r}
+#function that returns P(News|keyword)
+#P(News\KW)=P(KW\News)*P(News)/P(Kw)
+
+Pnews_word <- function(key_word, nyt_train, alphaLaplace=1, betaLaplace = 1)
+{
+  nyt_train$response.docs.snippet=unlist(str_replace_all(nyt_train$response.docs.snippet,"[^[:alnum:] ]",""))#leaves in only alpha numeric characters from headline
+  #print(key_word)
+  NewsGroup <- nyt_train[nyt_train$other=="News",]
+  OtherGroup <- nyt_train[nyt_train$other=="Other",]
+  
+  pNews=dim(NewsGroup)[1]/(dim(NewsGroup)[1]+dim(OtherGroup)[1])
+  pOther=1-pNews
+  
+  #meat and potatoes
+  pKWGivenNews <- (length(str_which(NewsGroup$response.docs.snippet,regex(str_c("\\b",key_word,"\\b",sep=""),ignore_case = TRUE )))+alphaLaplace)/(dim(NewsGroup)[1]+betaLaplace)
+  pKWGivenOther <- (length(str_which(OtherGroup$response.docs.snippet,regex(str_c("\\b",key_word,"\\b",sep=""),ignore_case = TRUE )))+alphaLaplace)/(dim(OtherGroup)[1]+betaLaplace)
+  
+  pKW <- length(str_which(nyt_train$response.docs.snippet,regex(str_c("\\b",key_word,"\\b",sep=""),ignore_case = TRUE )))/(dim(nyt_train)[1])
+  
+  pNewsGivenKW <- pKWGivenNews*pNews/pKW
+  pOtherGivenKW <- pKWGivenOther*pOther/pKW
+  
+  return(pNewsGivenKW)
+}
+
+
+```
+
+```{r}
+nyt_test2 <- allnytsearch[-allnytindx,]
+thescoreholdernews <- c()
+thescoreholderother <- c()
+articlescorenews <- 0
+articlescoreother <- 0
+
+for (i in 1:nrow(nyt_test)) {
+  articlescorenews=1;#because we will multiply so we have to start with 1 so that it's 1*
+  articlescoreother=1;
+  #this will take out all non alpha numeric characters
+  thetext <- unlist(str_split(str_replace_all(nyt_test[i,]$response.docs.snippet,"[^[:alnum:] ]",""),boundary("word")))
+  
+  #stopwords
+  wordstotakeout <- stopwords()
+  wordstotakeout <- str_c(wordstotakeout,collapse = "\\b|\\b")
+  wordstotakeout <- str_c("\\b",wordstotakeout,"\\b")
+  
+  importantwords <- thetext[!str_detect(thetext,regex(wordstotakeout,ignore_case = TRUE))]
+  
+  for (j in length(importantwords))
+    {
+    articlescorenews <- articlescorenews*Pnews_word(importantwords[j],nyt_train)
+    articlescoreother <- articlescoreother*(1- Pnews_word(importantwords[j],nyt_train))
+    
+  }
+  thescoreholdernews[i]=articlescorenews
+  thescoreholderother[i]=articlescoreother
+}
+
+nyt_test2$classified <- ifelse(thescoreholdernews>thescoreholderother,"News","Other")
+
+table(nyt_test2$classified,nyt_test2$other)#actual in columns
+confusionMatrix(as.factor(nyt_test2$classified),as.factor(nyt_test2$other))
+
+test2reference <- data.frame(type=nyt_test2[,34],from="reference")
+test2classified <- data.frame(type=nyt_test2[,35],from="classified")
+test2 <- rbind(test2reference,test2classified)
+test2 %>% ggplot(aes(x=from,fill=type))+geom_bar()+theme_hc()+scale_fill_pander()+ggtitle("NB Using Snippet")
 ```
