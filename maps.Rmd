@@ -148,6 +148,8 @@ summary(as.factor(ipa_train$Ale_type))
 classification <- knn(scale(ipa_train[,6:7]),scale(ipa_test[,6:7]),cl = ipa_train$Ale_type,k=35)
 cm <- confusionMatrix(classification,as.factor(ipa_test$Ale_type),positive = "IPA")
 cm
+#add changes later
+#change again
 ```
 ```{r}
 library(tidycensus)

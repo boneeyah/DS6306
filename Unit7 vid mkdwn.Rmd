@@ -10,21 +10,343 @@ library(plyr)
 library(jsonlite)
 library(dplyr)
 library(tidyverse)
-
+library(stringr)
+library(caret)
+library(mvtnorm)
 ```
 
 
 ```{r}
-api_key <- "7tl75iH7w2vOJJUBosFdtNyVhAzBKD2E"
+api_key <- ""
 term <- "Central+Park+Jogger"
 begin_date <- "19890419"
 end_date <- "19910419"
 
+baseurl <- paste0("https://api.nytimes.com/svc/search/v2/articlesearch.json?q=",term,"&begin_date=",begin_date,"&end_date=",end_date,"&facet_filter=true&api-key=",api_key)
 ```
 
 ```{r}
-baseurl <- paste0("http")
+#call
+baseurl
+
+initialquery <- fromJSON(baseurl)
+maxPages <- round((initialquery$response$meta$hits[1]/10)-1)
+maxPages
+
+pages <- list()
+
+for (i in 0:maxPages) {
+  nytsearch <- fromJSON(paste0(baseurl,"&page=",i), flatten = TRUE) %>% data.frame()
+  message("Retrieving page ",i)
+  pages[[i+1]] <- nytsearch
+  Sys.sleep(7)
+  
+}
+
+```
+```{r}
+allnytsearch <- rbind_pages(pages)
+
+#visualize
+allnytsearch %>% 
+  group_by(response.docs.type_of_material) %>% 
+  summarise(count=n()) %>% 
+  mutate(percent = (count /sum(count))*100) %>% 
+  ggplot()+
+  geom_col(aes(y=percent,x=response.docs.type_of_material,fill=response.docs.type_of_material))+coord_flip()
+```
 
 
+```{r}
+#create news/other column
+allnytsearch$other <- ifelse(allnytsearch$response.docs.type_of_material == "News","News","Other")
+
+allnytsearch %>% 
+  group_by(other) %>% 
+  summarise(count=n()) %>% 
+  mutate(percent = (count /sum(count))*100) %>% 
+  ggplot()+
+  geom_col(aes(y=percent,x=other,fill=other))+coord_flip()
+?geom_bar
+```
+
+
+```{r}
+set.seed(2) #set seed as class
+#do a 70-30 split
+n <- nrow(allnytsearch)
+allnytindx <- sample(seq(1:n),round(n*.7))
+
+nyt_train <- allnytsearch[allnytindx,]
+nyt_test <- allnytsearch[-allnytindx,]
+dim(nyt_test)
+dim(nyt_train)
+```
+
+
+```{r}
+#function that returns P(News|keyword)
+#P(News\KW)=P(KW\News)*P(News)/P(Kw)
+
+Pnews_word <- function(key_word, nyt_train, alphaLaplace=1, betaLaplace = 1)
+{
+  nyt_train$response.docs.headline.main=unlist(str_replace_all(nyt_train$response.docs.headline.main,"[^[:alnum:] ]",""))#leaves in only alpha numeric characters from headline
+  #print(key_word)
+  NewsGroup <- nyt_train[nyt_train$other=="News",]
+  OtherGroup <- nyt_train[nyt_train$other=="Other",]
+  
+  pNews=dim(NewsGroup)[1]/(dim(NewsGroup)[1]+dim(OtherGroup)[1])
+  pOther=1-pNews
+  
+  #meat and potatoes
+  pKWGivenNews <- (length(str_which(NewsGroup$response.docs.headline.main,regex(str_c("\\b",key_word,"\\b",sep=""),ignore_case = TRUE )))+alphaLaplace)/(dim(NewsGroup)[1]+betaLaplace)
+  pKWGivenOther <- (length(str_which(OtherGroup$response.docs.headline.main,regex(str_c("\\b",key_word,"\\b",sep=""),ignore_case = TRUE )))+alphaLaplace)/(dim(OtherGroup)[1]+betaLaplace)
+  
+  pKW <- length(str_which(nyt_train$response.docs.headline.main,regex(str_c("\\b",key_word,"\\b",sep=""),ignore_case = TRUE )))/(dim(nyt_train)[1])
+  
+  pNewsGivenKW <- pKWGivenNews*pNews/pKW
+  pOtherGivenKW <- pKWGivenOther*pOther/pKW
+  
+  return(pNewsGivenKW)
+}
+
+
+```
+
+```{r}
+Pnews_word("the",nyt_train)
+
+thescoreholdernews <- c()
+thescoreholderother <- c()
+articlescorenews <- 0
+articlescoreother <- 0
+
+for (i in 1:nrow(nyt_test)) {
+  articlescorenews=1;#because we will multiply so we have to start with 1 so that it's 1*
+  articlescoreother=1;
+  #this will take out all non alpha numeric characters
+  thetext <- unlist(str_split(str_replace_all(nyt_test[i,]$response.docs.headline.main,"[^[:alnum:] ]",""),boundary("word")))
+  
+  #stopwords
+  wordstotakeout <- stopwords()
+  wordstotakeout <- str_c(wordstotakeout,collapse = "\\b|\\b")
+  wordstotakeout <- str_c("\\b",wordstotakeout,"\\b")
+  
+  importantwords <- thetext[!str_detect(thetext,regex(wordstotakeout,ignore_case = TRUE))]
+  
+  for (j in length(importantwords))
+    {
+    articlescorenews <- articlescorenews*Pnews_word(importantwords[j],nyt_train)
+    articlescoreother <- articlescoreother*(1- Pnews_word(importantwords[j],nyt_train))
+    
+  }
+  thescoreholdernews[i]=articlescorenews
+  thescoreholderother[i]=articlescoreother
+}
+
+nyt_test$classified <- ifelse(thescoreholdernews>thescoreholderother,"News","Other")
+
+table(nyt_test$classified,nyt_test$other)#actual in columns
+```
+
+```{r}
+#redo for data+science
+term <- "Data+Science"
+begin_date <- "20180901"
+end_date <- "20190502"
+
+baseurl <- paste0("https://api.nytimes.com/svc/search/v2/articlesearch.json?q=",term,"&begin_date=",begin_date,"&end_date=",end_date,"&facet_filter=true&api-key=",api_key)
+
+
+initialquery <- fromJSON(baseurl)
+maxPages <- round((initialquery$response$meta$hits[1]/10)-1)
+maxPages
+
+pages <- list()
+
+for (i in 0:maxPages) {
+  nytsearch <- fromJSON(paste0(baseurl,"&page=",i), flatten = TRUE) %>% data.frame()
+  message("Retrieving page ",i)
+  pages[[i+1]] <- nytsearch
+  Sys.sleep(7)
+
+}
+
+
+datsci <- rbind_pages(pages)
+
+datsci$other <- ifelse(datsci$response.docs.type_of_material == "News","News","Other")
+
+sapply(datsci, function(x) sum(is.na(x)))
+datsci <- datsci %>% filter(other != "NA")
+
+n <- nrow(datsci)
+datsci_indx <- sample(seq(1:n),round(n*.7))
+
+train_ds <- datsci[datsci_indx,]
+test_ds <- datsci[-datsci_indx,]
+```
+
+```{r}
+#function that returns P(News|keyword)
+#P(News\KW)=P(KW\News)*P(News)/P(Kw)
+
+Pnews_word <- function(key_word, train_ds, alphaLaplace=1, betaLaplace = 1)
+{
+  train_ds$response.docs.headline.main=unlist(str_replace_all(train_ds$response.docs.headline.main,"[^[:alnum:] ]",""))#leaves in only alpha numeric characters from headline
+  #print(key_word)
+  NewsGroup <- train_ds[train_ds$other=="News",]
+  OtherGroup <- train_ds[train_ds$other=="Other",]
+  
+  pNews=dim(NewsGroup)[1]/(dim(NewsGroup)[1]+dim(OtherGroup)[1])
+  pOther=1-pNews
+  
+  #meat and potatoes
+  pKWGivenNews <- (length(str_which(NewsGroup$response.docs.headline.main,regex(str_c("\\b",key_word,"\\b",sep=""),ignore_case = TRUE )))+alphaLaplace)/(dim(NewsGroup)[1]+betaLaplace)
+  pKWGivenOther <- (length(str_which(OtherGroup$response.docs.headline.main,regex(str_c("\\b",key_word,"\\b",sep=""),ignore_case = TRUE )))+alphaLaplace)/(dim(OtherGroup)[1]+betaLaplace)
+  
+  pKW <- length(str_which(train_ds$response.docs.headline.main,regex(str_c("\\b",key_word,"\\b",sep=""),ignore_case = TRUE )))/(dim(train_ds)[1])
+  
+  pNewsGivenKW <- pKWGivenNews*pNews/pKW
+  pOtherGivenKW <- pKWGivenOther*pOther/pKW
+  
+  return(pNewsGivenKW)
+}
+
+thescoreholdernews <- c()
+thescoreholderother <- c()
+articlescorenews <- 0
+articlescoreother <- 0
+
+for (i in 1:nrow(test_ds)) {
+  articlescorenews=1;#because we will multiply so we have to start with 1 so that it's 1*
+  articlescoreother=1;
+  #this will take out all non alpha numeric characters
+  thetext <- unlist(str_split(str_replace_all(test_ds[i,]$response.docs.headline.main,"[^[:alnum:] ]",""),boundary("word")))
+  
+  #stopwords
+  wordstotakeout <- stopwords()
+  wordstotakeout <- str_c(wordstotakeout,collapse = "\\b|\\b")
+  wordstotakeout <- str_c("\\b",wordstotakeout,"\\b")
+  
+  importantwords <- thetext[!str_detect(thetext,regex(wordstotakeout,ignore_case = TRUE))]
+  
+  for (j in length(importantwords))
+    {
+    articlescorenews <- articlescorenews*Pnews_word(importantwords[j],train_ds)
+    articlescoreother <- articlescoreother*(1- Pnews_word(importantwords[j],train_ds))
+    
+  }
+  thescoreholdernews[i]=articlescorenews
+  thescoreholderother[i]=articlescoreother
+}
+
+test_ds$classified <- ifelse(thescoreholdernews>thescoreholderother,"News","Other")
+
+table(test_ds$classified,test_ds$other)#actual in columns
+
+caret::confusionMatrix(as.factor(test_ds$classified),as.factor(test_ds$other))
+summary(as.factor(test_ds$other))
+```
+
+```{r}
+
+irisversvig <- iris %>% filter(Species =="versicolor"|Species== "virginica")
+irisversvig <- droplevels(irisversvig,exclude = "setosa")
+
+iterations=100
+
+masterAcc <- matrix(nrow = iterations)
+splitperc <- .7
+
+n <- nrow(irisversvig)
+for (j in 1:iterations) {
+  trainindx <- sample(seq(1:n),round(.7*n))
+  train <- irisversvig[trainindx,]
+  test <- irisversvig[-trainindx,]
+  
+  model <- naiveBayes(train[,c(1,2)],train$Species)
+  table(predict(model,test[,c(1,2)]),test$Species)
+  CM <- confusionMatrix(table(predict(model,test[,c(1,2)]),test$Species))
+  masterAcc[j] <- CM$overall[1]
+}
+meanacc <- colMeans(masterAcc)
+meanacc
+
+```
+
+```{r}
+#Height Female
+x = seq(50,90,.1)
+y = dnorm(x,66,2)
+df = data.frame(x = x, y = y)
+df %>% ggplot(aes(x = x, y = y)) + geom_line() + xlab("B") + ylab("Probability Density") + ggtitle("Probability Density of Height of Women")
+#Height Male
+x = seq(50,90,.1)
+y = dnorm(x,70,3)
+df = data.frame(x = x, y = y)
+df %>% ggplot(aes(x = x, y = y)) + geom_line() + xlab("B") + ylab("Probability Density") + ggtitle("Probability Density of Height of Men")
+# Weight Female
+x = seq(100,180,.1)
+y = dnorm(x,130,9)
+df = data.frame(x = x, y = y)
+df %>% ggplot(aes(x = x, y = y)) + geom_line() + xlab("B") + ylab("Probability Density") + ggtitle("Probability Density of Weight of Women")
+# Weight Male
+x = seq(100,180,.1)
+y = dnorm(x,150,10)
+df = data.frame(x = x, y = y)
+df %>% ggplot(aes(x = x, y = y)) + geom_line() + xlab("B") + ylab("Probability Density") + ggtitle("Probability Density of Weight of Men")
+# Weight Male
+x = seq(100,180,.1)
+y = dnorm(x,150,10)
+df = data.frame(x = x, y = y)
+df %>% ggplot(aes(x = x, y = y)) + geom_line() + xlab("B") + ylab("Probability Density") + ggtitle("Probability Density of Weight of Men")
+# Making bivariate plots
+set.seed(34)
+males = rmvnorm(10,mean = c(70,150), sigma = matrix(c(9,0,0,100),ncol = 2))
+females = rmvnorm(10,mean = c(66,130), sigma = matrix(c(4,0,0,81),ncol = 2))
+dfMF = data.frame(height = c(males[,1],females[,1]), weight = c(males[,2],females[,2]), MorF = c(rep("M",10),rep("F",10)))
+dfMF %>% ggplot(aes(x = height, y = weight, color = MorF)) + geom_point() + stat_ellipse(level = c(.95)) + stat_ellipse(level = .90) + stat_ellipse(level = .70) + stat_ellipse(level = .40) + stat_ellipse(level = .10)
+#get sample means and sds from sample to use in calculations
+#rows 1-10 are male and 11-20 are female
+# column 1 is height and column 2 is weight and column 3 is male/female factor
+mean(dfMF[1:10,1])
+mean(dfMF[11:20,1])
+mean(dfMF[1:10,2])
+mean(dfMF[11:20,2])
+sd(dfMF[1:10,1])
+sd(dfMF[11:20,1])
+sd(dfMF[1:10,2])
+sd(dfMF[11:20,2])
+dnorm(68,69.57463,2.405437)
+dnorm(68,69.57463,2.405437)*dnorm(135,151.6851,8.276395)*.5/(dnorm(68,69.57463,2.405437)*dnorm(135,151.6851,8.276395)*.5 + dnorm(68,65.13555,1.548547)*dnorm(135,132.9786,10.11479)*.5)
+
+```
+```{r}
+model <- naiveBayes(dfMF[,c(1,2)],dfMF$MorF)
+predict(model,data.frame(height=67.5,weight = 141),type = "raw")
+```
+```{r}
+model <- naiveBayes(iris[,c(1,2)],iris$Species,laplace = 1)
+table(predict(model,iris[,c(1,2)]),iris$Species)
+```
+```{r}
+iterations = 100
+masterAcc <- matrix(nrow = iterations)
+splitperc <- .7
+n <- nrow(iris)
+
+for (j in 1:iterations) {
+  trainindx <- sample(seq(1:n),round(.7*n))
+  train <- iris[trainindx,]
+  test <- iris[-trainindx,]
+  
+  model <- naiveBayes(train[,c(1,2)], as.factor(train$Species),laplace = 1)
+  table(predict(model,test[,c(1,2)]),as.factor(test$Species))
+  CM <- confusionMatrix(table(predict(model,test[,c(1,2)]),as.factor(test$Species)))
+  masterAcc[j] <- CM$overall[1]
+}
+meanacc <- colMeans(masterAcc)
+meanacc
 ```
 
