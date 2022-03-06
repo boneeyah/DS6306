@@ -149,4 +149,52 @@ classification <- knn(scale(ipa_train[,6:7]),scale(ipa_test[,6:7]),cl = ipa_trai
 cm <- confusionMatrix(classification,as.factor(ipa_test$Ale_type),positive = "IPA")
 cm
 ```
+```{r}
+library(tidycensus)
 
+v20 <- load_variables(2019,"acs5")
+census_api_key("c95a20360aee06a9c146971d90046c8fe6a73035")
+income_med2019 <- get_acs("county",variables = "B25099_001", year = 2019)
+
+income_med2019$region <- gsub(".*,","",income_med2019$NAME) %>% str_to_lower() %>% str_trim(side = "left")
+income_med2019$subregion <-  gsub("County,.*|Parish,.*","",income_med2019$NAME) %>% str_trim(side = "right") %>% str_replace_all("[[:punct:]]","") %>% str_to_lower()
+
+income_med2019 <- income_med2019 %>% select(region,subregion,estimate)
+
+
+brew_county <- brewcomb %>% mutate(region=tolower(region),subregion=tolower(County)) %>% 
+  group_by(region,subregion) %>% count(subregion)
+
+us_counties <- us_counties %>% left_join(income_med2019,by=c("region","subregion"))
+us_counties <- us_counties %>% left_join(brew_county, by=c("region","subregion"))
+
+
+us_counties %>% ggplot()+
+  geom_polygon(aes(x=long,y=lat,group=group,fill=n),color = "gray90",size=.1)+
+  coord_map(projection = "albers",lat0=45,lat1=55)+
+  scale_fill_viridis_c()+
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        panel.background = element_blank(),
+        axis.title = element_blank())+
+  labs(fill="Brewery\nCount")+
+  ggtitle("Breweries by County\nContinental US")+
+  geom_polygon(data = us_states,aes(x=long,y=lat,group=group), color = "white",size=.15,fill="transparent")
+
+us_counties %>% ggplot()+
+  geom_polygon(aes(x=long,y=lat,group=group,fill=estimate),color = "gray90",size=.1)+
+  coord_map(projection = "albers",lat0=45,lat1=55)+
+  scale_fill_viridis_c()+
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        panel.background = element_blank(),
+        axis.title = element_blank())+
+  labs(fill="Brewery\nCount")+
+  ggtitle("Breweries by County\nContinental US")+
+  geom_polygon(data = us_states,aes(x=long,y=lat,group=group), color = "white",size=.15,fill="transparent")
+
+sapply(us_counties, function(x)sum(is.na(x)))
+
+```
