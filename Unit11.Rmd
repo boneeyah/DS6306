@@ -1,0 +1,65 @@
+---
+title: "Unit 11"
+author: "Miguel Bonilla & Kendall Scott"
+date: "3/11/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(fpp)
+data("melsyd")
+class(melsyd)
+
+summary(melsyd)
+
+plot(melsyd[,"Economy.Class"],main="Economy class passengers: Melbourne-Sydney",xlab="Year", ylab="Thousdands")
+plot(melsyd)
+```
+
+```{r}
+data("ausair")
+air <- window(ausair,start=1990,end=2004)
+plot(air,ylab="Airline PAssengers", xlab="Year")
+
+fit1 <- ses(air,alpha = .2,initial = "simple", h=3)
+fit2 <- ses(air,alpha = .6,initial = "simple",h=3)
+fit3 <- ses(air,h=3)
+
+plot(fit1, ylab="Airline Passengers", xlab="Year", main="", fcol="white",type="o")
+lines(fitted(fit1),col="blue", type="o")
+lines(fitted(fit2),col="red",type="o")
+lines(fitted(fit3),col="green",type="o")
+
+fit1 <- holt(air,alpha=.8,beta=.2,initial = "simple",h=5)
+fit2 <- holt(air,alpha=.8,beta=.2,initial = "simple",exponential = TRUE,h=5)
+plot(fit2,type="o",ylab = "Air Passengers in Australia", xlab = "year",fcol = "white", main = "Forecast Using Holt's")
+lines(fitted(fit1),col="blue")
+lines(fitted(fit2),col="red")
+
+```
+
+```{r}
+fit4 <- holt(air,alpha=.8,beta=.2,damped = TRUE, initial = "simple",h=5)
+plot(fit2,type="o",ylab = "Air Passengers in Australia", xlab = "year",fcol = "white", main = "Forecast Using Holt's")
+lines(fitted(fit1),col="blue")
+lines(fitted(fit2),col="red")
+lines(fitted(fit4),col="darkgreen",type="o")
+```
+
+```{r}
+data("austourists")
+aust <- window(austourists,start=2005)
+plot(austourists,type="l")
+fit1 <- hw(aust,seasonal = "additive")
+fit2 <- hw(aust,seasonal = "multiplicative")
+
+states <- cbind(fit1$model$states[,1:3],fit2$model$states[,1:3])
+colnames(states) <- c("level","slope","seasonal","level","slope","seasonal")
+plot(states,xlab="Year")
+```
+

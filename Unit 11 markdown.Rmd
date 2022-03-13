@@ -1,0 +1,131 @@
+---
+title: "Unit11 FLS"
+author: "Miguel Bonilla"
+date: "3/13/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#activity one
+library(fpp)
+library(dplyr)
+
+
+```
+
+
+```{r}
+#1 SES model for AUS air
+data("ausair")
+
+#returns a ts object
+air=window(ausair,start=1990,end=2004)
+
+#always plot the data first
+plot(air,ylab="airline Passengers", xlab="Year", main="Airline Passengers")
+
+#fit 3 different simple exponential smoothing models.. how are they different
+#what does the h parameter do?
+
+fit1=ses(air,initial = "simple", alpha = .9,h=4)
+fit2=ses(air,initial = "simple", alpha = .6,h=4)
+fit3=ses(air,h=4)#defaults
+
+#the forecast package has a nice accuracy function just pass it the model and the data
+accuracy(fit1,ausair)
+accuracy(fit2,ausair)
+accuracy(fit3,ausair)
+
+#reset plot
+plot(air,ylab="Airline Passengers", xlab="year", type="o",xlim=c(1990,2008), ylim=c(15,50), main="airline passengers")
+
+#plot the estimated values from the model
+lines(fitted(fit1),col="blue", type="o")
+lines(fitted(fit2), col="red",type="o")
+lines(fitted(fit3),col="green",type="o")
+
+#mean values are forecasts
+lines(fit1$mean, col="blue",type="o")
+lines(fit2$mean, col="red", type="o")
+lines(fit3$mean, col="green", type="o")
+
+#actual values
+air2008=window(ausair,start=1990,end=2007)
+points(air2008,type="o")
+
+accuracy(fit1,air2008)
+accuracy(fit2,air2008)
+accuracy(fit3,air2008)
+```
+
+
+```{r}
+library(fpp2)
+
+help("maxtemp")
+autoplot(maxtemp)
+
+max_temps <- window(maxtemp,start=1990,end=2011)
+autoplot(max_temps)
+
+#use ses to predict the next five years
+fit_5y <- ses(max_temps,h=5, initial = "optimal",alpha=.8)
+
+
+#plot the fit predicted value line, and forecast
+plot(max_temps,ylab="Max Temperature", xlab="Year", main="Max Temperature by Year",xlim=c(1990,2016),type="o")#data
+lines(fitted(fit_5y), col="blue",type="o")#fit with predicted values
+lines(fit_5y$mean,col="blue",type="o")#forecast
+legend("bottomright",lty=1,col = c(1,"blue"), c("data","SES"),pch=1)
+
+#Find AICc and BIC for this fitted model
+max_temps2012 <- window(maxtemp,start=2012,end=2016)
+accuracy(fit_5y,max_temps2012)
+fit_5y$model
+```
+
+
+```{r}
+fit_holt <- holt(max_temps,h=5,damped = TRUE,initial = "optimal",alpha=.45,beta = .15)
+
+plot(max_temps,ylab="Max Temps",xlab="Year",main="Max Temp by Year - Holt Linear",xlim=c(1990,2016),type="o",ylim=c(36,47))
+lines(fitted(fit_holt),type="o",col="blue")
+lines(fit_holt$mean,type="o",col="blue")
+legend("bottomright",lty=1,col = c(1,"blue"), c("data","Holt"),pch=1)
+
+#accuracy(fit_holt,max_temps2012)
+accuracy(fit_holt,max_temps2012)
+fit_holt$model
+
+```
+
+
+```{r}
+#calculate ASE
+accuracy(fit_5y,max_temps2012)
+accuracy(fit_holt,max_temps2012)
+```
+
+```{r}
+library(dygraphs)
+library(xts)
+
+Olli <- read.csv("Unit11TimeSeries_Ollivander.csv",header = FALSE, col.names = c("Date", "Olli"))
+Grego <- read.csv("Unit11TimeSeries_Gregorovitch.csv", header = FALSE, col.names = c("Date", "Grego"))
+
+Olli$Date <- as.Date.character(Olli$Date,format = "%m/%d/%Y")
+Grego$Date <- as.Date.character(Grego$Date,format = "%m/%d/%Y")
+
+tabl_Olli <- xts(Olli,order.by = Olli$Date)
+tabl_Grego <- xts(Grego,order.by = Grego$Date)
+
+
+wands <- cbind.xts(tabl_Olli$Olli,tabl_Grego$Grego)
+
+dygraph(wands, main = "<small><font color='#2a623d'>Wands by Year</font></small>") %>% dySeries("Olli", label = "Ollivander", color = "	#1a472a") %>% dySeries("Grego", label = "Gregorovitch", color = "#5d5d5d") %>% dyRangeSelector(height = 50, fillColor = "#1a472a",strokeColor = "#aaaaaa") %>% dyShading(from ="1995-06-24",to= "1998-05-02") %>% dyHighlight()
+```
+
