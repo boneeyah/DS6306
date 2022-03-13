@@ -1,0 +1,146 @@
+---
+title: "Unit10"
+author: "Miguel Bonilla & Kendall Scott"
+date: "3/6/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#question 1 fit the model
+library(ggplot2)
+library(dplyr)
+
+cars <- read.csv("cars.csv")
+
+fit=lm(MPG~Weight,cars)
+summary(fit)
+
+B0 <- fit$coefficients[1]
+B1 <- fit$coefficients[2]
+
+cars %>% ggplot(aes(x=Weight,y=MPG))+geom_point()+geom_smooth(method="lm")
+confint(fit)
+
+```
+```{r}#
+#75-25 split
+nsplit <- sample(nrow(cars), round(nrow(cars)*.75))
+train_cars <- cars[nsplit,]
+test_cars <- cars[-nsplit,]
+
+#train model
+model1 <- lm(MPG~Weight,data = train_cars)
+
+#generate predictions
+model1_pred <- predict(model1,test_cars)
+as.data.frame(model1_pred)
+
+#generate MSPE
+MSPE1 <- data.frame(observed=test_cars$MPG,predicted=model1_pred,resdidual=test_cars$MPG-model1_pred)
+mean(MSPE1$resdidual^2)
+
+#split model2
+cars2 <- cars %>% mutate(Weight2=Weight^2)
+train_cars2 <- cars2[nsplit,]
+test_cars2 <- cars2[-nsplit,]
+
+#train model 2
+model2 <- lm(MPG~Weight+Weight2,data=train_cars2)
+
+#generate predictions
+model2_pred <- predict(model2,test_cars2)
+as.data.frame(model2_pred)
+
+#generate MSPE
+MSPE2 <- data.frame(observed=test_cars2$MPG,predicted=model2_pred,residual=test_cars2$MPG-model2_pred)
+mean(MSPE2$residual^2)
+
+
+```
+```{r}
+#conduct an internal leave one out cross validation
+#model1 mpg=B+B*Weight
+
+cars2 <- cars
+preds <- c()
+for (i in 1:nrow(cars2)) {
+  df <- cars2[-i,]
+  df_out <- cars2[i,]
+  model1 <- lm(MPG~Weight, data=df)
+  model1_pred <- predict(model1,df_out)
+  preds <- rbind(preds,model1_pred)
+  
+}
+
+#model2
+cars2 <- cars2 %>% mutate(predictions1=preds, Weight2=Weight^2)
+preds <- c()
+for (i in 1:nrow(cars2)) {
+  df <- cars2[-i,]
+  df_out <- cars2[i,]
+  model2 <- lm(MPG~Weight+Weight2,data=df)
+  model2_pred <- predict(model2,df_out)
+  preds <- rbind(preds,model2_pred)
+  
+}
+
+cars2 <- cars2 %>% mutate(predictions2=preds)
+model2 <- lm(MPG~Weight+Weight2,data = df)
+summary(model2)
+confint(model2)
+w2000 <- data.frame(Weight=2000,Weight2=2000^2,MPG=NA)
+predict(model2,w2000)
+```
+
+
+```{r}
+#Question 3
+
+library(plotly)
+#impute (insert) missing horsepowers by fitting a regression model
+sapply(cars,function(x)sum(is.na(x)))
+
+cars3 <- cars[!is.na(cars$Horsepower),]#filter out NAs
+#75-25 split
+indx <- sample(seq(1:nrow(cars3)),round(nrow(cars3)*.75))
+cars_train <- cars3[indx,]
+cars_test <- cars3[-indx,]
+
+#fit models
+model3 <- lm(Horsepower~Weight+Displacement+Acceleration,cars_train)
+model4 <- lm(Horsepower~Weight,cars_train)
+model5 <- lm(Horsepower~Weight+Year,cars_train)
+#predictions
+model3_pred <- predict(model3,cars_test)
+model4_pred <- predict(model4,cars_test)
+model5_pred <- predict(model5,cars_test)
+#find MSPE to compare models
+MSPE3 <- cars_test$Horsepower - model3_pred
+MSPE4 <- cars_test$Horsepower - model4_pred
+MSPE5 <- cars_test$Horsepower - model5_pred
+
+mean(MSPE3^2)
+mean(MSPE4^2)
+mean(MSPE5^5)
+
+cars2$Horsepower_inp <- ifelse(is.na(cars2$Horsepower),round(model3$fitted.values,0),cars2$Horsepower)#rounded since all are integers
+cars2[is.na(cars2$Horsepower),c(1,5,13)]
+summary(model3)
+
+#fit a model for MPG~Horsepower
+
+mpg_hp <- lm(MPG~Horsepower_inp,cars2)
+summary(mpg_hp)
+confint(mpg_hp, parm = "Horsepower_inp")
+
+#estimate mean MPG for 250 HP
+
+hp250 <- data.frame(MPG=NA,Horsepower_inp=250)
+predict(mpg_hp,hp250)
+
+```
+
