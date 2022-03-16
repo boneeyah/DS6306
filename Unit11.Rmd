@@ -1,6 +1,6 @@
 ---
 title: "Unit 11"
-author: "Miguel Bonilla & Kendall Scott"
+author: "Miguel Bonilla"
 date: "3/11/2022"
 output: html_document
 ---
